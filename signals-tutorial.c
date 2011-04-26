@@ -1,13 +1,3 @@
-/*
-   ============================================================================
-Name        : signals-tutorial.c
-Author      : Fabricio Silva Epaminondas
-Version     :
-Copyright   : Your copyright notice
-Description : D-Bus GLib bindings tutorial in C, Ansi-style
-============================================================================
- */
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -153,25 +143,28 @@ int proxy_example()
    A network struct:
    contains the name (SSID?) of the network
    and the commands which should be executed on (dis)connection
-*/
+ */
 struct network_struct {
-    char* network_name;
+    gchar* network_name;
     GSList* connect_cmd;
-    GSList* disconnect_cmd
+    GSList* disconnect_cmd;
 };
 
-typedef struct network_struct Network;
+typedef struct network_struct network_t;
 
 /*
- Returns a hashmap woth networks
- Each networks has a hashmap with the keys "connect" and "disconnect"
- Each keys has a list with commands to be executed
-*/
+   Returns a hashmap woth networks
+   Each networks has a hashmap with the keys "connect" and "disconnect"
+   Each keys has a list with commands to be executed
+ */
 int read_config_file()
 {
     static const char filename[] = "/home/bottiger/.networkchange";
     FILE *file = fopen ( filename, "r" );
-    GHashTable* network_hash = g_hash_table_new(g_str_hash, g_direct_equal, NULL, g_free);
+
+    // main hash where you can lookup a network_t by network name
+    GHashTable* network_hash = g_hash_table_new_full(g_str_hash, g_direct_equal, NULL, g_free);
+    network_t* current_network;
 
     if ( file != NULL )
     {
@@ -183,77 +176,110 @@ int read_config_file()
             const char delims[] = ":";
             gchar *result;
             int i = 0;
-            gchar *hash_key;
-            gchar *hash_value;
+            gchar *config_key;
+            gchar *config_value;
+
+            typedef enum { NETWORK, CONNECT, DISCONNECT, NONE } Keys;
+            Keys current_key = NONE;
 
             result = strtok( line, delims );
             while( result != NULL ) {
+                GSList* connect_list;
+                GSList* disconnect_list;
+
                 printf("%d", i);
                 printf( "%s\n", g_strstrip(result) );
                 printf("----------\n");
                 result = strtok( NULL, delims );
 
                 if (i == 0) {
-                    hash_key = g_strstrip(result);
-                    if (strcmp(hash_key, "network")) {
-                        // network
-                    } else if (strcmp(hash_key, "connect")) {
+                    config_key = g_strstrip(result);
+                    if (strcmp(config_key, "network")) {
+                        // create a new network network
+                        current_key = NETWORK;
+                    } else if (strcmp(config_key, "connect")) {
                         // connect
-                    } else of (strcmp(hash_key, "disconnect")) {
+                        current_key = CONNECT;
+                    } else if (strcmp(config_key, "disconnect")) {
                         // disconnect
+                        current_key = DISCONNECT;
                     } else {
                         exit(EXIT_FAILURE);
                     }
                 } else if (i == 1) {
-                    hash_value = g_strstrip(result);
+                    config_value = g_strstrip(result);
+
+                    switch (current_key) {
+                        case NETWORK:
+                            // network
+                            current_network->network_name = config_value;
+                            break;
+
+                        case CONNECT:
+                            // connect
+                            connect_list = current_network->connect_cmd;
+                            connect_list = g_slist_append(connect_list, config_value);
+                            current_network->connect_cmd = connect_list;
+                            break;
+
+                        case DISCONNECT:
+                            // disconnect
+                            disconnect_list = current_network->disconnect_cmd;
+                            disconnect_list = g_slist_append(disconnect_list, config_value);
+                            current_network->disconnect_cmd = disconnect_list;
+                            break;
+                    }
+
+                    current_key = NONE;
                 } else {
                     exit(EXIT_FAILURE);
                 }
                 i++;
             }
-            printf("\n%s\n", hash_key);
-            g_hash_table_insert(network_hash, "hash_key", hash_value);
+            printf("\n%s\n", config_key);
+            //g_hash_table_insert(network_hash, "hash_key", config_value);
             printf("=====\n");
             fclose ( file );
         }
-        else
-        {
-            perror ( filename ); /* why didn't the file open? */
-        }
-
     }
-
-
-    int main()
+    else
     {
-        read_config_file();
-        /*
-           pid_t   pid, sid;
-
-           pid = fork();
-
-           if (pid < 0) {
-           exit(EXIT_FAILURE);
-           } else if (pid > 0) {
-           printf("pid: %d", pid);
-           exit(EXIT_SUCCESS);
-           }
-
-           umask(0);
-
-           sid = setsid();
-           if (sid < 0) {
-           exit(EXIT_FAILURE);
-           }
-
-           if ((chdir("/tmp")) < 0) {
-           exit(EXIT_FAILURE);
-           }
-
-        /* Uncomment example you want to run *
-        return filter_example();
-        //	return proxy_example();
-
-        exit(EXIT_SUCCESS);
-         */
+        perror ( filename ); /* why didn't the file open? */
     }
+
+}
+
+
+int main()
+{
+    read_config_file();
+    /*
+       pid_t   pid, sid;
+
+       pid = fork();
+
+       if (pid < 0) {
+       exit(EXIT_FAILURE);
+       } else if (pid > 0) {
+       printf("pid: %d", pid);
+       exit(EXIT_SUCCESS);
+       }
+
+       umask(0);
+
+       sid = setsid();
+       if (sid < 0) {
+       exit(EXIT_FAILURE);
+       }
+
+       if ((chdir("/tmp")) < 0) {
+       exit(EXIT_FAILURE);
+       }
+
+    /* Uncomment example you want to run *
+    return filter_example();
+    //	return proxy_example();
+
+    exit(EXIT_SUCCESS);
+     */
+}
